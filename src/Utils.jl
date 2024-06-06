@@ -1,138 +1,53 @@
 module Utils
 
-using Random
-using CairoMakie, Colors
-using Graphs, SimpleWeightedGraphs, GraphMakie
+export Z_from_labels, Z_to_labels, order_col, construct_parent_X, map_to_child
 
-# Write documentation for the following function
-"""
-    plot_adjacency(A::AbstractMatrix, labels=nothing; hmcolor=cgrad([:white, :red]))
+using ..EigenDR: EigenDRResult
 
-Plot the adjacency matrix as a heatmap of a graph, with optional labels.
+using Pipe: @pipe
 
-# Arguments
-- `A::AbstractMatrix`: The adjacency matrix of the graph.
-- `labels::Union{Nothing, Vector{Int}}`: The labels of the nodes.
-- `hmcolor::ColorGradient`: The color gradient for the heatmap.
-
-# Example
-```julia
-using Random
-using Graphs, SimpleWeightedGraphs
-using CairoMakie, Colors
-using GraphMakie
-using Utils
-
-Random.seed!(0)
-n = 10
-g = SimpleWeightedGraph(n)
-for i in 1:n
-    for j in i+1:n
-        if rand() < 0.2
-            add_edge!(g, i, j, rand())
+function _fill_Z!(Z::BitMatrix, l::AbstractVector{Int})
+    for (idx, k) in enumerate(unique(l)), i in axes(l, 1)
+        if l[i] == k
+            Z[i, idx] = !Z[i, idx]
         end
     end
 end
-A = adjacency_matrix(g)
-labels = rand(1:3, n)
-plot_adjacency(A, labels)
-```
-"""
-function plot_adjacency(A::AbstractMatrix, labels=nothing; hmcolor=cgrad([:white, :red]))
-    mat_plot = log.(A .+ 1)
-    mat_plot[diagind(mat_plot)] .= 0
 
-    fig = Figure(size=(800, 800))
-
-    if !isnothing(labels)
-        colors = distinguishable_colors(size(unique(labels), 1), [RGB(1, 1, 1), RGB(0, 0, 0)], dropseed=true)
-        new_labels = copy(labels)
-        if 0 in new_labels
-            colors[1] = RGB(0, 0, 0)
-            new_labels .+= 1
-        end
-        axtop = Axis(fig[1, 2])
-        axleft = Axis(fig[2, 1])
-        axhm = Axis(fig[2, 2], aspect=DataAspect())
-
-        rowsize!(fig.layout, 2, Relative(0.9))
-        colsize!(fig.layout, 2, Relative(0.9))
-
-        hidespines!(axtop)
-        hidedecorations!(axtop)
-        hidespines!(axleft)
-        hidedecorations!(axleft)
-        hidedecorations!(axhm)
-
-        xlims!(axtop, low=1, high=size(mat_plot, 1))
-        ylims!(axtop, low=0, high=1)
-        xlims!(axleft, low=0, high=1)
-        ylims!(axleft, low=1, high=size(mat_plot, 1))
-        barplot!(axtop, 1:size(mat_plot, 1), ones(size(mat_plot, 1)),
-            color=colors[new_labels], gap=0, dodge_gap=0, width=1)
-        barplot!(axleft, 1:size(mat_plot, 1), ones(size(mat_plot, 1)),
-            color=colors[new_labels], gap=0, dodge_gap=0, width=1,
-            direction=:x)
-        heatmap!(axhm, mat_plot, colormap=hmcolor)
-        axleft.yreversed = true
-        axhm.yreversed = true
-    else
-        axhm = Axis(fig[1, 1], aspect=DataAspect(), yreversed=true)
-        heatmap!(axhm, mat_plot, colormap=hmcolor)
-    end
-    fig
+function Z_from_labels(l::AbstractVector{Int})::BitMatrix
+    Z = falses(size(l, 1), size(unique(l), 1))
+    _fill_Z!(Z, l)
+    Z
 end
 
-"""
-    generate_graph(n, k, p_intra_edge=0.5, p_inter_edge=0.01; rand_weight=false, seed=nothing)
-
-Generate a random graph with `n` nodes and `k` communities.
-
-# Arguments
-- `n::Int`: The number of nodes in the graph.
-- `k::Int`: The number of communities in the graph.
-- `p_intra_edge::Float`: The probability of an edge within a community.
-- `p_inter_edge::Float`: The probability of an edge between communities.
-- `rand_weight::Bool`: Whether to generate random weights for the edges.
-- `seed::Union{Nothing, Int}`: The seed for the random number generator.
-
-# Example
-```julia
-using Random
-using Graphs, SimpleWeightedGraphs
-using Utils
-
-n = 10
-k = 3
-g = generate_graph(n, k, p_intra_edge=0.5, p_inter_edge=0.01, rand_weight=true, seed=0)
-```
-"""
-function generate_graph(n, k, p_intra_edge=0.5, p_inter_edge=0.01; rand_weight=false, seed=nothing)
-    if !isnothing(seed)
-        _state = copy(Random.default_rng())
-    end
-    g = SimpleWeightedGraph(n)
-    community_sizes = rand(10:50, k)
-    start = 1
-    for s in community_sizes
-        for i in start:(start+s-1), j in (i+1):(start+s-1)
-            if rand() < p_intra_edge
-                add_edge!(g, i, j, rand_weight ? rand() : 1)
-            end
-        end
-    end
-    for i in 1:n, j in (i+1):n
-        if rand() < p_inter_edge
-            add_edge!(g, i, j, rand_weight ? rand() : 1)
-        end
-    end
-
-    if !isnothing(seed)
-        Random.seed!(_state)
-    end
-    g
+function Z_to_labels(Z::BitMatrix)::Vector{Int}
+    @pipe Z .* collect(1:size(Z, 2))' |> sum(_, dims = 2) |> vec
 end
 
-export plot_adjacency, generate_graph
+function order_col(Z::BitMatrix)::BitMatrix
+    @pipe findfirst.(eachcol(Z)) |> sortperm |> Z[:, _]
+end
+
+function construct_parent_X(cls_res::EigenDRResult)::AbstractMatrix{Float64}
+    lbs = Z_from_labels(cls_res.assignments)
+    pX = zeros(size(lbs, 2), size(lbs, 2))
+    foreach(CartesianIndices(pX)) do idx
+        # pX[idx] = cls_res.orig_X[lbs[:, idx[1]], lbs[:, idx[2]]] |> sum
+        pX[idx] = cls_res.X[lbs[:, idx[1]], lbs[:, idx[2]]] |> sum
+    end
+    pX
+end
+
+function map_to_child(
+    parent_labels::AbstractVector{Int64},
+    child_labels::AbstractVector{Int64},
+)::Vector{Int64}
+    converting_lbs = Z_from_labels(parent_labels)
+    base_lbs = Z_from_labels(child_labels)
+    converted = @pipe map(eachcol(converting_lbs)) do l
+        @pipe base_lbs[:, l] |> reduce(.|, eachcol(_))
+    end |> hcat(_...)
+    Z_to_labels(converted)
+end
 
 end # module Utils
