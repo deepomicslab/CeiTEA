@@ -33,7 +33,7 @@ function construct_parent_X(cls_res::EigenDRResult)::AbstractMatrix{Float64}
     pX = zeros(size(lbs, 2), size(lbs, 2))
     foreach(CartesianIndices(pX)) do idx
         # pX[idx] = cls_res.orig_X[lbs[:, idx[1]], lbs[:, idx[2]]] |> sum
-        pX[idx] = cls_res.X[lbs[:, idx[1]], lbs[:, idx[2]]] |> sum
+        pX[idx] = cls_res.input.A[lbs[:, idx[1]], lbs[:, idx[2]]] |> sum
     end
     pX
 end

@@ -10,7 +10,8 @@ using Clustering: dbscan, pairwise, randindex
 using ThreadPools: bmap
 
 using ..Utils: Z_from_labels, Z_to_labels
-using ..StructuralEntropy: se
+using ..Entropy: entropy
+using ..EigenDR: EIGENDR_INPUT
 
 
 function ilp(
@@ -34,21 +35,26 @@ function ilp(
     obj_val, x_val
 end
 
-function intercomp(
-    x::AbstractVector{Bool},
-    y::AbstractVector{Bool};
-    keep = false,
-)::BitMatrix
+function intercomp(x::AbstractVector{Bool}, y::AbstractVector{Bool};)::BitMatrix
     inter = x .& y
     if !any(inter)
         return hcat([x, y]...)
     end
     x_rm_inter = x .⊻ inter
     y_rm_inter = y .⊻ inter
-    if keep
-        return hcat([inter, x_rm_inter, y_rm_inter, x, y]...)
+    ret = Set{AbstractVector{Bool}}()
+    # push!(ret, [inter, x_rm_inter, y_rm_inter]...)
+    if entropy(inter) + entropy(x_rm_inter) < entropy(x)
+        push!(ret, [inter, x_rm_inter]...)
+    else
+        push!(ret, x)
     end
-    return hcat([inter, x_rm_inter, y_rm_inter]...)
+    if entropy(inter) + entropy(y_rm_inter) < entropy(y)
+        push!(ret, [inter, y_rm_inter]...)
+    else
+        push!(ret, y)
+    end
+    return hcat(ret...)
 end
 
 @views function intercomp(L::BitMatrix)::BitMatrix
@@ -67,18 +73,10 @@ end
     end |> vcat(_...) |> hcat(_...)
 end
 
-function candidates_from_pairs(
-    l1::BitMatrix,
-    l2::BitMatrix,
-    X::Matrix{Float64},
-    D::Diagonal{Float64};
-    # metric_f::Function,
-    # f_args::Tuple;
-    topology = true,
-)::Tuple{BitMatrix,Float64}
+function candidates_from_pairs(l1::BitMatrix, l2::BitMatrix)::Tuple{BitMatrix,Float64}
     # println(i1, i2)
     clbs = @pipe intercomp(l1, l2) |> unique(eachcol(_)) |> hcat(_...)
-    cse = se.(eachcol(clbs), Ref(X), Ref(D), topology = topology)
+    cse = entropy.(eachcol(clbs))
     # idx = findall(cse .< 0)
     # candidate_lbs = clbs[:, idx]
     # candidate_se = cse[idx]
@@ -101,20 +99,16 @@ end
 
 function candidates_from_β(
     β::Float64,
-    X::AbstractMatrix{Float64},
-    D::Diagonal{Float64};
-    # metric_f::Function,
-    # f_args::Tuple;
     vrange::Union{AbstractVector{Int64},Symbol} = :full,
-    topology = true,
 )::Tuple{Vector{BitMatrix},Vector{Float64}}
     @debug "Computing candidates from β = $β"
-    _, v = eigen(β * D - X)
+    flush(stderr)
+    _, v = eigen(β * EIGENDR_INPUT.D - EIGENDR_INPUT.A)
     lbs = @pipe Int64.(v .>= 0) |>
           unique(eachcol(_)) |>
           Z_from_labels.(_) |>
           filter(l -> size(l, 2) > 1, _)
-    ses = se.(lbs, Ref(X), Ref(D), topology = topology)
+    ses = entropy.(lbs)
     # neg_i = findall(ses .< 0)
     # lbs = lbs[neg_i]
     # ses = ses[neg_i]
@@ -129,17 +123,10 @@ function candidates_from_β(
     lbs[si], ses[si]
 end
 
-function iter_mlbs!(
-    idx::BitVector,
-    lbs::AbstractVector{BitMatrix},
-    curr_lbs::BitMatrix,
-    X::AbstractMatrix{Float64},
-    D::Diagonal{Float64};
-    topology = true,
-)
+function iter_mlbs!(idx::BitVector, lbs::AbstractVector{BitMatrix}, curr_lbs::BitMatrix)
     # mlbs = select_for_pair.(lbs[idx], Ref(curr_lbs), Ref(X), Ref(D))
     mlbs = bmap(findall(idx)) do i
-        candidates_from_pairs(lbs[i], curr_lbs, X, D, topology = topology)
+        candidates_from_pairs(lbs[i], curr_lbs)
     end
     lbs = getindex.(mlbs, 1)
     ses = getindex.(mlbs, 2)
@@ -149,13 +136,7 @@ function iter_mlbs!(
     lbs[imin], ses[imin]
 end
 
-function select_best(
-    lbs::AbstractVector{BitMatrix},
-    ses::AbstractVector{Float64},
-    X::AbstractMatrix{Float64},
-    D::Diagonal{Float64};
-    topology = true,
-)
+function select_best(lbs::AbstractVector{BitMatrix}, ses::AbstractVector{Float64})
     idx = trues(length(lbs))
     idx[1] = false
     curr_lbs = lbs[1]
@@ -164,7 +145,7 @@ function select_best(
     while true
         # println("prev_se: $prev_se")
         # flush(stdout)
-        curr_lbs, curr_se = iter_mlbs!(idx, lbs, curr_lbs, X, D, topology = topology)
+        curr_lbs, curr_se = iter_mlbs!(idx, lbs, curr_lbs)
         if isapprox(curr_se, prev_se, atol = eps(Float32))
             break
         end

@@ -34,4 +34,18 @@ function generate_similarity(
     return mat
 end
 
+function generate_clusters(
+    n_clusters::Int64,
+    min_n_points_per_cluster::Int64,
+    max_n_points_per_cluster::Int64;
+    seed::Int64 = 123,
+)
+    n_points = rand(
+        MersenneTwister(seed),
+        min_n_points_per_cluster:max_n_points_per_cluster,
+        n_clusters,
+    )
+    return n_points
+end
+
 end # module Simulation

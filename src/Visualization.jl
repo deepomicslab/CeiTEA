@@ -15,7 +15,7 @@ function plot_adjacency(
     mat_plot = log.(A .+ 1)
     mat_plot[diagind(mat_plot)] .= 0
 
-    fig = Figure(; size = (800, 800))
+    fig = Figure(size = (800, 800))
 
     if !isnothing(labels)
         colors = distinguishable_colors(
