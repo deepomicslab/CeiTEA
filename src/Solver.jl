@@ -11,21 +11,27 @@ using ThreadPools: bmap
 
 using ..Utils: Z_from_labels, Z_to_labels
 using ..Entropy: entropy
-using ..EigenDR: EIGENDR_INPUT
+using ..CeiTEA: CEITEA_INPUT
 
 
 function ilp(
     L::AbstractMatrix{Bool},
     metrics::AbstractVector{Float64};
     used::Union{BitVector,Nothing} = nothing,
+    K::Union{Symbol,Int64} = :auto,
 )
     model = Model(HiGHS.Optimizer)
     set_attribute(model, "output_flag", false)
     set_attribute(model, "log_to_console", false)
+    set_attribute(model, "parallel", "on")
+    # set_attribute(model, "threads", 64)
     @variable(model, x[1:size(L, 2)], Bin)
     @constraint(model, L * x .== 1)
     if !isnothing(used) && any(used)
         @constraint(model, x[hide] .== 0)
+    end
+    if K != :auto
+        @constraint(model, sum(x) .== K)
     end
     @objective(model, Min, x' * metrics)
     optimize!(model)
@@ -73,14 +79,18 @@ end
     end |> vcat(_...) |> hcat(_...)
 end
 
-function candidates_from_pairs(l1::BitMatrix, l2::BitMatrix)::Tuple{BitMatrix,Float64}
+function candidates_from_pairs(
+    l1::BitMatrix,
+    l2::BitMatrix;
+    K::Union{Symbol,Int64} = :auto,
+)::Tuple{BitMatrix,Float64}
     # println(i1, i2)
     clbs = @pipe intercomp(l1, l2) |> unique(eachcol(_)) |> hcat(_...)
     cse = entropy.(eachcol(clbs))
     # idx = findall(cse .< 0)
     # candidate_lbs = clbs[:, idx]
     # candidate_se = cse[idx]
-    obj_se, x = ilp(clbs, cse)
+    obj_se, x = ilp(clbs, cse, K = K)
     clbs[:, x], obj_se
 end
 
@@ -99,44 +109,59 @@ end
 
 function candidates_from_β(
     β::Float64,
-    vrange::Union{AbstractVector{Int64},Symbol} = :full,
+    vrange::Union{AbstractVector{Int64},Symbol} = :auto,
 )::Tuple{Vector{BitMatrix},Vector{Float64}}
-    @debug "Computing candidates from β = $β"
-    flush(stderr)
-    _, v = eigen(β * EIGENDR_INPUT.D - EIGENDR_INPUT.A)
+    print("\rComputing candidates from β = $β", " "^10)
+    flush(stdout)
+    _, v = eigen(β * CEITEA_INPUT.D - CEITEA_INPUT.A)
     lbs = @pipe Int64.(v .>= 0) |>
           unique(eachcol(_)) |>
           Z_from_labels.(_) |>
           filter(l -> size(l, 2) > 1, _)
-    ses = entropy.(lbs)
+    # ses = entropy.(lbs)
+    ses = bmap(entropy, lbs)
     # neg_i = findall(ses .< 0)
     # lbs = lbs[neg_i]
     # ses = ses[neg_i]
-    if vrange != :full
+    if vrange != :auto
         si = sortperm(ses)
         lbs = lbs[si[vrange]]
         ses = ses[si[vrange]]
     end
 
-    lbs, ses = dedup(lbs, ses)
+    if length(lbs) > 1
+        lbs, ses = dedup(lbs, ses)
+    end
     si = sortperm(ses)
     lbs[si], ses[si]
 end
 
-function iter_mlbs!(idx::BitVector, lbs::AbstractVector{BitMatrix}, curr_lbs::BitMatrix)
+function iter_mlbs!(
+    idx::BitVector,
+    lbs::AbstractVector{BitMatrix},
+    curr_lbs::BitMatrix;
+    K::Union{Symbol,Int64} = :auto,
+)
     # mlbs = select_for_pair.(lbs[idx], Ref(curr_lbs), Ref(X), Ref(D))
     mlbs = bmap(findall(idx)) do i
-        candidates_from_pairs(lbs[i], curr_lbs)
+        candidates_from_pairs(lbs[i], curr_lbs, K = K)
     end
     lbs = getindex.(mlbs, 1)
     ses = getindex.(mlbs, 2)
     imin = argmin(ses)
-    # println(findall(idx)[imin])
+    # println(findall(isapprox.(ses, ses[imin], atol = eps(Float32))))
     idx[findall(idx)[imin]] = false
     lbs[imin], ses[imin]
 end
 
-function select_best(lbs::AbstractVector{BitMatrix}, ses::AbstractVector{Float64})
+function select_best(
+    lbs::AbstractVector{BitMatrix},
+    ses::AbstractVector{Float64};
+    K::Union{Symbol,Int64} = :auto,
+)
+    if length(lbs) == 1
+        return lbs[1], ses[1]
+    end
     idx = trues(length(lbs))
     idx[1] = false
     curr_lbs = lbs[1]
@@ -145,7 +170,7 @@ function select_best(lbs::AbstractVector{BitMatrix}, ses::AbstractVector{Float64
     while true
         # println("prev_se: $prev_se")
         # flush(stdout)
-        curr_lbs, curr_se = iter_mlbs!(idx, lbs, curr_lbs)
+        curr_lbs, curr_se = iter_mlbs!(idx, lbs, curr_lbs, K = K)
         if isapprox(curr_se, prev_se, atol = eps(Float32))
             break
         end

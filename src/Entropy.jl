@@ -3,7 +3,7 @@ module Entropy
 export set_entropy_params, entropy
 
 using ..Utils: Z_from_labels
-using ..EigenDR: EIGENDR_INPUT
+using ..CeiTEA: CEITEA_INPUT
 
 using LinearAlgebra: Diagonal
 
@@ -28,8 +28,8 @@ function set_entropy_params(;
 end
 
 function entropy(z::AbstractVector{Bool})::Float64
-    zAz = EIGENDR_INPUT.A[z, z] |> sum
-    zDz = EIGENDR_INPUT.D.diag[z] |> sum
+    zAz = CEITEA_INPUT.A[z, z] |> sum
+    zDz = CEITEA_INPUT.D.diag[z] |> sum
 
     if isapprox(zDz, 0, atol = ENTROPY_PARAMS.tol) &&
        isapprox(zAz, 0, atol = ENTROPY_PARAMS.tol)
