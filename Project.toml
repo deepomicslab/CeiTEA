@@ -1,31 +1,25 @@
-name = "SEMap"
+name = "CeiTEA"
 uuid = "12a75fb6-5b73-4f32-bb45-c36cece0b685"
 authors = ["Bowen Tan <bowentan78@gmail.com>"]
 version = "0.1.0"
 
 [deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 Clustering = "aaaa29a8-35af-508c-8bc3-b662a17a0fe5"
-ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
 Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
-DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
-Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
-GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 GZip = "92fee26a-97fe-5a0c-ad85-20a5f3185b63"
-GraphMakie = "1ecd5474-83a3-4783-bb4f-06765db800d2"
-Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
 HiGHS = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"
-IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
-Ipopt = "b6b21f68-93f8-5de0-b562-5493be1d77c9"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
-LightGraphs = "093fc24a-ae57-5d10-9952-331d41423f4d"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-NLopt = "76087f3c-5699-56af-9a33-bf431cd00edd"
-NearestNeighbors = "b8a86587-4115-5ab1-83bc-aa920d37bbce"
-NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
-Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Pipe = "b98c9c47-44ae-5843-9183-064241ee97a0"
-Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-SimpleWeightedGraphs = "47aef6b3-ad0c-573a-a1e2-d07658019622"
-StatsPlots = "f3b207a7-027a-5e70-b257-86293d7955fd"
+ThreadPools = "b189fb0b-2eb5-4ed4-bc0c-d34c51242431"
+
+[compat]
+BenchmarkTools = "1.5.0"
+
+[extras]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
