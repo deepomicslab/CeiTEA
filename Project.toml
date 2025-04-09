@@ -15,11 +15,12 @@ HiGHS = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Pipe = "b98c9c47-44ae-5843-9183-064241ee97a0"
+PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 ThreadPools = "b189fb0b-2eb5-4ed4-bc0c-d34c51242431"
 
 [compat]
-BenchmarkTools = "1.5.0"
+PyCall = "1.96.4"
 
 [extras]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
